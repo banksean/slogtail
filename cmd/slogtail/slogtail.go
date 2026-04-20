@@ -58,13 +58,7 @@ func main() {
 
 	go func() {
 		for line := range t.Lines {
-			decoder := json.NewDecoder(strings.NewReader(line.Text))
-			var slogLine map[string]any
-			if err := decoder.Decode(&slogLine); err != nil {
-				fmt.Fprintln(os.Stderr, err.Error())
-			}
-			h.Handle(ctx, slogLine)
-			writer.Flush()
+			processLine(ctx, h, writer, line.Text, os.Stderr)
 		}
 	}()
 	if *flagPager {
@@ -81,6 +75,20 @@ func main() {
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "error: %v\n", err.Error())
 		}
+	}
+}
+
+func processLine(ctx context.Context, h *Handler, writer writeFlusher, line string, stderr io.Writer) {
+	decoder := json.NewDecoder(strings.NewReader(line))
+	var slogLine map[string]any
+	if err := decoder.Decode(&slogLine); err != nil {
+		fmt.Fprintln(stderr, err.Error())
+	}
+	if err := h.Handle(ctx, slogLine); err != nil {
+		fmt.Fprintln(stderr, err.Error())
+	}
+	if err := writer.Flush(); err != nil {
+		fmt.Fprintln(stderr, err.Error())
 	}
 }
 
