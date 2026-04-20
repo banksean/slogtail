@@ -106,6 +106,8 @@ type Handler struct {
 }
 
 func (h *Handler) Handle(ctx context.Context, r map[string]any) error {
+	_ = ctx
+
 	colorize := func(code int, value string) string {
 		return value
 	}
@@ -163,7 +165,7 @@ func (h *Handler) Handle(ctx context.Context, r map[string]any) error {
 	if ok {
 		ts, err := time.Parse(time.RFC3339Nano, timestamp)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "error parsing timestamp %q: %v\n", timestamp, err)
+			return fmt.Errorf("error parsing timestamp %q: %w", timestamp, err)
 		} else {
 			timestamp = ts.Local().Format(timeFormat)
 		}
@@ -172,18 +174,22 @@ func (h *Handler) Handle(ctx context.Context, r map[string]any) error {
 
 	var msg string
 	msg, ok = r[slog.MessageKey].(string)
-	if !ok {
+	if ok {
 		msg = colorize(ansi.White, msg)
 	}
 
-	delete(r, slog.LevelKey)
-	delete(r, slog.TimeKey)
-	delete(r, slog.MessageKey)
+	attrs := make(map[string]any, len(r))
+	for key, value := range r {
+		if key == slog.LevelKey || key == slog.TimeKey || key == slog.MessageKey {
+			continue
+		}
+		attrs[key] = value
+	}
 
 	var attrsAsBytes []byte
 	var err error
-	if h.outputEmptyAttrs || len(r) > 0 {
-		attrsAsBytes, err = json.MarshalIndent(r, "", "  ")
+	if h.outputEmptyAttrs || len(attrs) > 0 {
+		attrsAsBytes, err = json.MarshalIndent(attrs, "", "  ")
 		if err != nil {
 			return fmt.Errorf("error when marshaling attrs: %w", err)
 		}

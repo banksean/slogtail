@@ -46,6 +46,15 @@ func TestHandlerHandleFormatsStructuredLog(t *testing.T) {
 	if got := out.String(); got != want {
 		t.Fatalf("Handle() output = %q, want %q", got, want)
 	}
+	if got := input[slog.LevelKey]; got != "INFO" {
+		t.Fatalf("input level mutated to %v", got)
+	}
+	if got := input[slog.TimeKey]; got != "2026-04-20T12:34:56.789Z" {
+		t.Fatalf("input time mutated to %v", got)
+	}
+	if got := input[slog.MessageKey]; got != "started" {
+		t.Fatalf("input message mutated to %v", got)
+	}
 }
 
 func TestHandlerHandleUsesReplaceAttr(t *testing.T) {
@@ -88,6 +97,14 @@ func TestHandlerHandleErrors(t *testing.T) {
 			name:  "unknown level",
 			input: map[string]any{slog.LevelKey: "TRACE"},
 			want:  `unknown level name "TRACE"`,
+		},
+		{
+			name: "invalid timestamp",
+			input: map[string]any{
+				slog.LevelKey: "INFO",
+				slog.TimeKey:  "not-a-time",
+			},
+			want: `error parsing timestamp "not-a-time"`,
 		},
 		{
 			name: "marshal failure",
@@ -147,15 +164,20 @@ func TestProcessLineReportsErrors(t *testing.T) {
 	handler.colorize = false
 
 	var stderr bytes.Buffer
-	processLine(context.Background(), handler, writer, "{", &stderr)
+	processLine(
+		context.Background(),
+		handler,
+		writer,
+		`{"level":"INFO","time":"not-a-time","msg":"ok"}`,
+		&stderr,
+	)
 
 	if writer.flushCount != 1 {
 		t.Fatalf("Flush() calls = %d, want 1", writer.flushCount)
 	}
 	got := stderr.String()
 	for _, want := range []string{
-		"unexpected EOF",
-		"level is not a string",
+		`error parsing timestamp "not-a-time"`,
 		"flush failed",
 	} {
 		if !strings.Contains(got, want) {
